@@ -1,0 +1,6 @@
+Image_Name,Ratio,Original_KB,Compressed_KB,Compression_Ratio
+cat.png,4:1:0,768.0,30.439,25.23
+cat.png,4:2:0,768.0,32.737,23.459
+cat.png,4:4:0,768.0,36.635,20.964
+cat.png,4:2:2,768.0,36.753,20.896
+cat.png,4:4:4,768.0,43.825,17.524

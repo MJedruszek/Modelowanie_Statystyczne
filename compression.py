@@ -3,6 +3,8 @@ import cv2
 import numpy as np
 import scipy.fftpack
 import zlib
+import csv
+import pickle
 
 #Class used for keeping the compressed image information
 class container:
@@ -108,7 +110,10 @@ def DecompressLayer(S,Q, ratio):
     if total_pixels == 262144 or ratio == "4:2:0" or ratio == "4:4:4" :
         a = int(np.sqrt(total_pixels))
         height, width = a, a
-    elif ratio == "4:2:2" or ratio == "4:4:0":
+    elif ratio == "4:2:2":
+        a = int(np.sqrt(total_pixels / 2))
+        height, width = 2 * a, a
+    elif ratio == "4:4:0":
         a = int(np.sqrt(total_pixels / 2))
         height, width = a, 2 * a
     elif ratio == "4:1:0":
@@ -216,8 +221,44 @@ def decompressAll(compressed_image):
     return img
 
 
+#calculates and writes stats to csv file
+def writeStatsToCSV(csv_filename, image_name, ratio, original_image_array, compressed_bin_filename):
+    file_exists = os.path.isfile(csv_filename)
+    
+    # 1. calculates file sizes
+    raw_size_bytes = original_image_array.nbytes
+    compressed_size_bytes = os.path.getsize(compressed_bin_filename)
+    
+    # Calculate sizes in KB and the compression ratio
+    raw_kb = raw_size_bytes / 1024
+    compressed_kb = compressed_size_bytes / 1024
+    compression_ratio = raw_size_bytes / compressed_size_bytes if compressed_size_bytes > 0 else 0
+    
+    # data structure
+    stats_data = {
+        "Image_Name": image_name,
+        "Ratio": ratio,
+        "Original_KB": round(raw_kb, 3),
+        "Compressed_KB": round(compressed_kb, 3),
+        "Compression_Ratio": round(compression_ratio, 3)
+    }
+    
+    # 3. write portion
+    with open(csv_filename, mode="a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=stats_data.keys())
+        
+        # Write header only if the file is new
+        if not file_exists:
+            writer.writeheader()
+            
+        writer.writerow(stats_data)
+    
+    print(f"Stats successfully appended to {csv_filename}")
+
 #Tests
-original_image = cv2.imread("cat.png")
+image_filename="cat.png"
+ratio="4:4:4"
+original_image = cv2.imread(image_filename)
 #image needs to be square shaped and divisible by 8
 resized_image = cv2.resize(original_image, (512, 512), dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
 
@@ -249,7 +290,23 @@ QC= np.array([
 QN= np.ones((8,8))
 
 
-compressed = compressAll(resized_image, ratio="4:1:0", QY=QY, QC=QC)
+compressed = compressAll(resized_image, ratio=ratio, QY=QY, QC=QC)
+
+compressed_filename = "compressed_cat.bin"
+with open(compressed_filename, "wb") as f:
+    clean_package = {
+        "Y": compressed.Y,
+        "Cr": compressed.Cr,
+        "Cb": compressed.Cb,
+        "QY": compressed.QY,
+        "QC": compressed.QC,
+        "chroma_ratio": compressed.chroma_ratio
+    }
+    pickle.dump(clean_package, f)
+
+# 3. WRITE TO CSV (The function does all the calculating!)
+writeStatsToCSV("compression_results.csv", image_filename, compressed.chroma_ratio, resized_image, compressed_filename)
+
 decompressed_image = decompressAll(compressed)
 width, height = original_image.shape[:2]
 decompressed_image = cv2.resize(decompressed_image, (height, width) , dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
