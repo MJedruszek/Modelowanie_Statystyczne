@@ -256,13 +256,15 @@ def writeStatsToCSV(csv_filename, image_name, ratio, original_image_array, compr
     print(f"Stats successfully appended to {csv_filename}")
 
 #Tests
-image_filename="cat.png"
+#4:4:4 4:4:0 4:2:2 4:2:0 4:1:0
+image_filename="red_cat.png"
 ratio="4:4:4"
+decompressed_name = "red_cat_4:4.png"
 original_image = cv2.imread(image_filename)
 #image needs to be square shaped and divisible by 8
 resized_image = cv2.resize(original_image, (512, 512), dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
 
-cv2.imshow("Original image", resized_image)
+cv2.imshow("Original image", original_image)
 
 #values from JPEG standard
 QY= np.array([
@@ -316,4 +318,4 @@ cv2.imshow("After compression and decompression", decompressed_image)
 # Wait for a key press before closing the window
 cv2.waitKey(0)
 cv2.destroyAllWindows()
-cv2.imwrite("cat_5.png", decompressed_image)
+cv2.imwrite(decompressed_name, decompressed_image)
