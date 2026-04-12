@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import scipy.fftpack
+import zlib
 
 #Class used for keeping the compressed image information
 class container:
@@ -107,10 +108,12 @@ def DecompressLayer(S,Q, ratio):
     if total_pixels == 262144 or ratio == "4:2:0" or ratio == "4:4:4" :
         a = int(np.sqrt(total_pixels))
         height, width = a, a
-    elif ratio == "4:2:2" or ratio == "4:1:0":
+    elif ratio == "4:2:2" or ratio == "4:4:0":
         a = int(np.sqrt(total_pixels / 2))
         height, width = a, 2 * a
-        
+    elif ratio == "4:1:0":
+        a = int(np.sqrt(total_pixels / 2))
+        height, width = 2 * a, a
     else:
         a = int(np.sqrt(total_pixels / 2))
         height, width = a, 2 * a
@@ -158,9 +161,8 @@ def chromaResampling(L, ratio="4:4:4"):
         B = np.repeat(L,repeats=2, axis=0)
         B = np.repeat(B, repeats=2, axis=1)
     elif ratio == "4:1:0":
-        B = np.repeat(L, repeats=2, axis=1)
-        B = np.repeat(B,repeats=2, axis=0)
-        B = np.repeat(B,repeats=2, axis=0)
+        B = np.repeat(L, repeats=4, axis=1) 
+        B = np.repeat(B, repeats=2, axis=0)
         
         print(B.shape)
     else:
@@ -168,6 +170,18 @@ def chromaResampling(L, ratio="4:4:4"):
         B=L
     return B
 
+#huffman + zl77 from zlib
+def applyEntropyCoding(layer):
+    # Convert numpy array to 16-bit integers (to save space), then to raw bytes
+    layer_bytes = layer.astype(np.int16).tobytes()
+    # Compress the bytes using zlib (Deflate/Huffman)
+    return zlib.compress(layer_bytes, level=9)
+
+def removeEntropyCoding(compressed_bytes):
+    # Decompress the bytes back to their original state
+    decompressed_bytes = zlib.decompress(compressed_bytes)
+    # Convert bytes back into a numpy array of floats for the rest of your pipeline
+    return np.frombuffer(decompressed_bytes, dtype=np.int16).astype(float)
 
 #Final compression and decompression
 
@@ -182,9 +196,16 @@ def compressAll(original_image, ratio = "4:4:4",QY=np.ones((8,8)),QC=np.ones((8,
     img.Cr=CompressLayer(img.Cr,img.QC)
     img.Cb=CompressLayer(img.Cb,img.QC)
     #tu może do dodania kompresja strumieniowa (algorytm Hoffmana)
+    img.Y = applyEntropyCoding(img.Y)
+    img.Cr = applyEntropyCoding(img.Cr)
+    img.Cb = applyEntropyCoding(img.Cb)
     return img
 
 def decompressAll(compressed_image):
+    compressed_image.Y = removeEntropyCoding(compressed_image.Y)
+    compressed_image.Cr = removeEntropyCoding(compressed_image.Cr)
+    compressed_image.Cb = removeEntropyCoding(compressed_image.Cb)
+
     compressed_image.Y = DecompressLayer(compressed_image.Y, compressed_image.QY, ratio = "4:4:4")
     compressed_image.Cr = DecompressLayer(compressed_image.Cr, compressed_image.QC, compressed_image.chroma_ratio)
     compressed_image.Cb = DecompressLayer(compressed_image.Cb, compressed_image.QC, compressed_image.chroma_ratio)
