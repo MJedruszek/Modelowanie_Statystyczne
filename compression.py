@@ -257,9 +257,9 @@ def writeStatsToCSV(csv_filename, image_name, ratio, original_image_array, compr
 
 #Tests
 #4:4:4 4:4:0 4:2:2 4:2:0 4:1:0
-image_filename="red_cat.png"
+image_filename="cat.png"
 ratio="4:1:0"
-decompressed_name = "red_cat_1:0.png"
+decompressed_name = "cat5.png"
 original_image = cv2.imread(image_filename)
 #image needs to be square shaped and divisible by 8
 resized_image = cv2.resize(original_image, (512, 512), dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
