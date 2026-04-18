@@ -1,3 +1,5 @@
 /PetImages
 /.vscode
-/venv
+venv/
+.venv/
+env/

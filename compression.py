@@ -5,6 +5,7 @@ import scipy.fftpack
 import zlib
 import csv
 import pickle
+import zstandard as zstd
 
 #Class used for keeping the compressed image information
 class container:
@@ -180,13 +181,20 @@ def applyEntropyCoding(layer):
     # Convert numpy array to 16-bit integers (to save space), then to raw bytes
     layer_bytes = layer.astype(np.int16).tobytes()
     # Compress the bytes using zlib (Deflate/Huffman)
-    return zlib.compress(layer_bytes, level=9)
+    #return zlib.compress(layer_bytes, level=9)
+    compressor = zstd.ZstdCompressor(level=22) 
+    return compressor.compress(layer_bytes)
+
 
 def removeEntropyCoding(compressed_bytes):
     # Decompress the bytes back to their original state
-    decompressed_bytes = zlib.decompress(compressed_bytes)
-    # Convert bytes back into a numpy array of floats for the rest of your pipeline
+    #decompressed_bytes = zlib.decompress(compressed_bytes)
+    
+    decompressor = zstd.ZstdDecompressor()
+    decompressed_bytes = decompressor.decompress(compressed_bytes)
     return np.frombuffer(decompressed_bytes, dtype=np.int16).astype(float)
+
+
 
 #Final compression and decompression
 
@@ -257,9 +265,9 @@ def writeStatsToCSV(csv_filename, image_name, ratio, original_image_array, compr
 
 #Tests
 #4:4:4 4:4:0 4:2:2 4:2:0 4:1:0
-image_filename="cat.png"
+image_filename="images/dog.png"
 ratio="4:1:0"
-decompressed_name = "cat5.png"
+decompressed_name = "images/cat5.png"
 original_image = cv2.imread(image_filename)
 #image needs to be square shaped and divisible by 8
 resized_image = cv2.resize(original_image, (512, 512), dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
@@ -307,15 +315,15 @@ with open(compressed_filename, "wb") as f:
     pickle.dump(clean_package, f)
 
 # 3. WRITE TO CSV (The function does all the calculating!)
-writeStatsToCSV("compression_results.csv", image_filename, compressed.chroma_ratio, resized_image, compressed_filename)
+writeStatsToCSV("compression_results_duda.csv", image_filename, compressed.chroma_ratio, resized_image, compressed_filename)
 
-decompressed_image = decompressAll(compressed)
-width, height = original_image.shape[:2]
-decompressed_image = cv2.resize(decompressed_image, (height, width) , dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
+#decompressed_image = decompressAll(compressed)
+#width, height = original_image.shape[:2]
+#decompressed_image = cv2.resize(decompressed_image, (height, width) , dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
 
-cv2.imshow("After compression and decompression", decompressed_image)
+#cv2.imshow("After compression and decompression", decompressed_image)
  
 # Wait for a key press before closing the window
 cv2.waitKey(0)
 cv2.destroyAllWindows()
-cv2.imwrite(decompressed_name, decompressed_image)
+#cv2.imwrite(decompressed_name, decompressed_image)
