@@ -108,7 +108,7 @@ def CompressLayer(L,Q):
 def DecompressLayer(S,Q, ratio):
     num_blocks = len(S) // 64
     total_pixels = num_blocks * 64
-    if total_pixels == 262144 or ratio == "4:2:0" or ratio == "4:4:4" :
+    if total_pixels == 262144 or ratio == "4:2:0" or ratio == "4:4:4" or ratio == "4:1:0:0:0" or ratio == "final":
         a = int(np.sqrt(total_pixels))
         height, width = a, a
     elif ratio == "4:2:2":
@@ -120,6 +120,12 @@ def DecompressLayer(S,Q, ratio):
     elif ratio == "4:1:0":
         a = int(np.sqrt(total_pixels / 2))
         height, width = 2 * a, a
+    elif ratio == "8:1:0":
+        a = int(np.sqrt(total_pixels/4))
+        height, width = 4*a, a
+    elif ratio == "8:1:0:0:0":
+        a = int(np.sqrt(total_pixels/2))
+        height, width = 2*a, a
     else:
         a = int(np.sqrt(total_pixels / 2))
         height, width = a, 2 * a
@@ -150,6 +156,14 @@ def chromaSubsampling(L, ratio="4:4:4"):
         B=L[::2,::2] #every other column and every other line
     elif ratio == "4:1:0":
         B=L[::2,::4] #every other line and every four columns
+    elif ratio == "8:1:0":
+        B=L[::2,::8] #every other line and every eight columns
+    elif ratio == "4:1:0:0:0":
+        B=L[::4,::4] #every four lines and every four columns
+    elif ratio == "8:1:0:0:0":
+        B=L[::4,::8] #every four lines and every eight columns
+    elif ratio == "final":
+        B=L[::8,::8] #every eight lines and every eight columns
     else:
         print("Wrong ratio, doing 4:4:4")
         B=L
@@ -169,7 +183,25 @@ def chromaResampling(L, ratio="4:4:4"):
     elif ratio == "4:1:0":
         B = np.repeat(L, repeats=4, axis=1) 
         B = np.repeat(B, repeats=2, axis=0)
-        
+        print(B.shape)
+    elif ratio == "8:1:0":
+        B = np.repeat(L, repeats=8, axis=1) 
+        B = np.repeat(B, repeats=2, axis=0)
+        print(B.shape)
+    elif ratio == "4:1:0:0:0":
+        print("HERE")
+        B = np.repeat(L, repeats=4, axis=1) 
+        B = np.repeat(B, repeats=4, axis=0)
+        print(B.shape)
+    elif ratio == "8:1:0:0:0":
+        print("HERE")
+        B = np.repeat(L, repeats=8, axis=1) 
+        B = np.repeat(B, repeats=4, axis=0)
+        print(B.shape)
+    elif ratio == "final":
+        print("HERE")
+        B = np.repeat(L, repeats=8, axis=1) 
+        B = np.repeat(B, repeats=8, axis=0)
         print(B.shape)
     else:
         print("Wrong ratio, doing 4:4:4")
@@ -265,14 +297,14 @@ def writeStatsToCSV(csv_filename, image_name, ratio, original_image_array, compr
 
 #Tests
 #4:4:4 4:4:0 4:2:2 4:2:0 4:1:0
-image_filename="images/dog.png"
-ratio="4:1:0"
-decompressed_name = "images/cat5.png"
+image_filename="images/cat.png"
+ratio="final"
+decompressed_name = "images/cat9.png"
 original_image = cv2.imread(image_filename)
 #image needs to be square shaped and divisible by 8
 resized_image = cv2.resize(original_image, (512, 512), dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
 
-cv2.imshow("Original image", original_image)
+# cv2.imshow("Original image", original_image)
 
 #values from JPEG standard
 QY= np.array([
@@ -317,13 +349,13 @@ with open(compressed_filename, "wb") as f:
 # 3. WRITE TO CSV (The function does all the calculating!)
 writeStatsToCSV("compression_results_duda.csv", image_filename, compressed.chroma_ratio, resized_image, compressed_filename)
 
-#decompressed_image = decompressAll(compressed)
-#width, height = original_image.shape[:2]
-#decompressed_image = cv2.resize(decompressed_image, (height, width) , dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
+decompressed_image = decompressAll(compressed)
+width, height = original_image.shape[:2]
+decompressed_image = cv2.resize(decompressed_image, (height, width) , dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
 
 #cv2.imshow("After compression and decompression", decompressed_image)
  
 # Wait for a key press before closing the window
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-#cv2.imwrite(decompressed_name, decompressed_image)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+cv2.imwrite(decompressed_name, decompressed_image)
