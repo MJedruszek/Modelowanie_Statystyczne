@@ -6,7 +6,7 @@ import seaborn as sns
 df = pd.read_csv("compression_results_duda.csv")
 
 # 2. Sort the ratios logically 
-ratio_order = ['4:4:4', '4:2:2', '4:4:0', '4:2:0', '4:1:0']
+ratio_order = ['4:4:4', '4:2:2', '4:4:0', '4:2:0', '4:1:0', '8:1:0', '4:1:0:0:0', '8:1:0:0:0', '8:1:0:0:0:0:0:0:0']
 df['Ratio'] = pd.Categorical(df['Ratio'], categories=ratio_order, ordered=True)
 df = df.sort_values(['Image_Name', 'Ratio'])
 

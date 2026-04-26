@@ -296,10 +296,11 @@ def writeStatsToCSV(csv_filename, image_name, ratio, original_image_array, compr
     print(f"Stats successfully appended to {csv_filename}")
 
 #Tests
-#4:4:4 4:4:0 4:2:2 4:2:0 4:1:0
-image_filename="images/cat.png"
+#4:4:4 4:4:0 4:2:2 4:2:0 4:1:0 
+# 4:1:0:0:0 8:1:0 8:1:0:0:0 final
+image_filename="images/dog.png"
 ratio="final"
-decompressed_name = "images/cat9.png"
+decompressed_name = "images/red_cat_final.png"
 original_image = cv2.imread(image_filename)
 #image needs to be square shaped and divisible by 8
 resized_image = cv2.resize(original_image, (512, 512), dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
@@ -358,4 +359,4 @@ decompressed_image = cv2.resize(decompressed_image, (height, width) , dst=None, 
 # Wait for a key press before closing the window
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
-cv2.imwrite(decompressed_name, decompressed_image)
+# cv2.imwrite(decompressed_name, decompressed_image)
