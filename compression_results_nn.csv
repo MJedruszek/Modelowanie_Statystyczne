@@ -1,0 +1,5 @@
+Image_Name,Ratio,Original_KB,Compressed_KB,Compression_Ratio
+images/cat.png,Autoencoder,768.0,4.0,192.0
+images/cat.png,Autoencoder,768.0,4.0,192.0
+images/dog.png,Autoencoder,768.0,4.0,192.0
+images/red_cat.png,Autoencoder,768.0,4.0,192.0

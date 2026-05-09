@@ -6,6 +6,8 @@ import zlib
 import csv
 import pickle
 import zstandard as zstd
+import torch
+from cat_autoencoder import CatAutoencoder
 
 #Class used for keeping the compressed image information
 class container:
@@ -295,12 +297,62 @@ def writeStatsToCSV(csv_filename, image_name, ratio, original_image_array, compr
     
     print(f"Stats successfully appended to {csv_filename}")
 
+# autoencoder compression
+def compress_with_nn(image_path, model, output_bin_path="nn_compressed.bin"):
+    # 1. Load and prepare the image (Resize to 128x128 for this specific network)
+    img = cv2.imread(image_path)
+    img = cv2.resize(img, (128, 128))
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    # 2. Convert to PyTorch Tensor (Normalize 0 to 1, and reshape to C x H x W)
+    tensor_img = torch.tensor(img_rgb, dtype=torch.float32).permute(2, 0, 1) / 255.0
+    tensor_img = tensor_img.unsqueeze(0) # Add a batch dimension: [1, 3, 128, 128]
+    
+    # 3. Compress! (Pass ONLY through the encoder)
+    model.eval()
+    with torch.no_grad():
+        latent_space = model.encoder(tensor_img)
+    
+    # 4. Save to binary file
+    # We convert to float16 to literally halve the file size on disk!
+    latent_numpy = latent_space.squeeze(0).numpy().astype(np.float16) 
+    latent_numpy.tofile(output_bin_path)
+    
+    # Return the file size to write to your CSV
+    return os.path.getsize(output_bin_path) / 1024.0  # Return size in KB
+
+# autoencoder decompression
+def decompress_with_nn(bin_path, model):
+    # 1. Load the binary file back into a NumPy array
+    latent_numpy = np.fromfile(bin_path, dtype=np.float16)
+    
+    # 2. Reshape back to the latent dimensions (8 channels, 16x16)
+    latent_numpy = latent_numpy.reshape(8, 16, 16)
+    
+    # 3. Convert back to PyTorch Tensor
+    latent_tensor = torch.tensor(latent_numpy, dtype=torch.float32).unsqueeze(0)
+    
+    # 4. Decompress! (Pass ONLY through the decoder)
+    model.eval()
+    with torch.no_grad():
+        reconstructed_tensor = model.decoder(latent_tensor)
+    
+    # 5. Convert back to an OpenCV Image (BGR, 0-255)
+    reconstructed_img = reconstructed_tensor.squeeze(0).permute(1, 2, 0).numpy()
+    reconstructed_img = (reconstructed_img * 255).astype(np.uint8)
+    reconstructed_bgr = cv2.cvtColor(reconstructed_img, cv2.COLOR_RGB2BGR)
+    
+    return reconstructed_bgr
+
 #Tests
 #4:4:4 4:4:0 4:2:2 4:2:0 4:1:0 
 # 4:1:0:0:0 8:1:0 8:1:0:0:0 final
-image_filename="images/dog.png"
+image_filename="images/red_cat.png"
 ratio="final"
-decompressed_name = "images/red_cat_final.png"
+decompressed_name = "images/red_cat_nn.png"
+model = CatAutoencoder()
+model.load_state_dict(torch.load("cat_autoencoder_v1.pth", map_location=torch.device('cpu')))
+model.eval()
 original_image = cv2.imread(image_filename)
 #image needs to be square shaped and divisible by 8
 resized_image = cv2.resize(original_image, (512, 512), dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
@@ -333,30 +385,33 @@ QC= np.array([
 QN= np.ones((8,8))
 
 
-compressed = compressAll(resized_image, ratio=ratio, QY=QY, QC=QC)
+#compressed = compressAll(resized_image, ratio=ratio, QY=QY, QC=QC)
 
 compressed_filename = "compressed_cat.bin"
-with open(compressed_filename, "wb") as f:
-    clean_package = {
-        "Y": compressed.Y,
-        "Cr": compressed.Cr,
-        "Cb": compressed.Cb,
-        "QY": compressed.QY,
-        "QC": compressed.QC,
-        "chroma_ratio": compressed.chroma_ratio
-    }
-    pickle.dump(clean_package, f)
+# with open(compressed_filename, "wb") as f:
+#     clean_package = {
+#         "Y": compressed.Y,
+#         "Cr": compressed.Cr,
+#         "Cb": compressed.Cb,
+#         "QY": compressed.QY,
+#         "QC": compressed.QC,
+#         "chroma_ratio": compressed.chroma_ratio
+#     }
+#     pickle.dump(clean_package, f)
+compress_with_nn(image_path=image_filename, model=model, output_bin_path=compressed_filename)
 
 # 3. WRITE TO CSV (The function does all the calculating!)
-writeStatsToCSV("compression_results_duda.csv", image_filename, compressed.chroma_ratio, resized_image, compressed_filename)
+writeStatsToCSV("compression_results_nn.csv", image_filename, "Autoencoder", resized_image, compressed_filename)
 
-decompressed_image = decompressAll(compressed)
-width, height = original_image.shape[:2]
-decompressed_image = cv2.resize(decompressed_image, (height, width) , dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
+decompressed_image = decompress_with_nn(compressed_filename, model)
+
+#decompressed_image = decompressAll(compressed)
+#width, height = original_image.shape[:2]
+#decompressed_image = cv2.resize(decompressed_image, (height, width) , dst=None, fx=None, fy=None, interpolation=cv2.INTER_LINEAR)
 
 #cv2.imshow("After compression and decompression", decompressed_image)
  
 # Wait for a key press before closing the window
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
-# cv2.imwrite(decompressed_name, decompressed_image)
+cv2.imwrite(decompressed_name, decompressed_image)
