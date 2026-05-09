@@ -1,7 +1,7 @@
 import cv2
 
 img1 = cv2.imread('images/cat.png')
-img2 = cv2.imread('images/cat9.png')
+img2 = cv2.imread('images/cat2.png')
 
 #odejmowanie zwykłe
 subtraction = cv2.subtract(img1, img2)
@@ -17,5 +17,5 @@ cv2.imshow('Absolute Difference', boosted_diff)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 
-cv2.imwrite('images/subcat19.png', boosted_sub)
-cv2.imwrite('images/abscat19.png', boosted_diff)
+cv2.imwrite('images/subcat12.png', boosted_sub)
+cv2.imwrite('images/abscat12.png', boosted_diff)
