@@ -18,16 +18,19 @@ class CatAutoencoder(nn.Module):
             nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1), # 32 x 32 x 32
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1), # 64 x 16 x 16
+            # nn.ReLU(),
+            # nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1), # 64 x 8 x 8 
             nn.ReLU(),
-            # 8 x 16 x 16
-            nn.Conv2d(64, 8, kernel_size=3, stride=1, padding=1),  
+            nn.Conv2d(64, 8, kernel_size=3, stride=1, padding=1),  # 8 x 8 x 8
             nn.ReLU()
         )
         
         # decoder
         self.decoder = nn.Sequential(
-            nn.Conv2d(8, 64, kernel_size=3, stride=1, padding=1),
+           nn.Conv2d(8, 64, kernel_size=3, stride=1, padding=1),  # 64 x 8 x 8
             nn.ReLU(),
+            # nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1), # 64 x 16 x 16 <-- Added Layer
+            # nn.ReLU(),
             nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1), # 32 x 32 x 32
             nn.ReLU(),
             nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1), # 16 x 64 x 64
@@ -88,7 +91,9 @@ def train_autoencoder(cat_folder):
         print(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item():.4f}")
         
     # zachowaj model
-    torch.save(model.state_dict(), "cat_autoencoder_v1.pth")
+    #v1 - podstawowy
+    #v2 - dodana warstwa conv 64,64 jako przedostatnia
+    torch.save(model.state_dict(), "cat_autoencoder_v2.pth")
     return model
 
 if __name__ == "__main__":
