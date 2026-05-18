@@ -29,7 +29,7 @@ class CatAutoencoder(nn.Module):
         self.decoder = nn.Sequential(
            nn.Conv2d(8, 64, kernel_size=3, stride=1, padding=1),  # 64 x 8 x 8
             nn.ReLU(),
-            # nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1), # 64 x 16 x 16 <-- Added Layer
+            # nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1), # 64 x 16 x 16
             # nn.ReLU(),
             nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1), # 32 x 32 x 32
             nn.ReLU(),

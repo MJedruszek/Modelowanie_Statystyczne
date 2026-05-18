@@ -88,8 +88,8 @@ def decompress_with_nn(bin_path, model):
     
     return reconstructed_bgr
 
-image_filename="images/grey_cat.png"
-decompressed_name = "images/grey_cat_nn.png"
+image_filename="img_quiz/krok.png"
+decompressed_name = "img_quiz/krok_nn.png"
 compressed_filename = "compressed_grey.bin"
 # with open(compressed_filename, "wb") as f:
 #     clean_package = {
