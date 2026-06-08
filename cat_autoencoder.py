@@ -6,6 +6,7 @@ import os
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 import glob
+import torch.nn.functional as F
 
 class CatAutoencoder(nn.Module):
     def __init__(self):
@@ -44,6 +45,7 @@ class CatAutoencoder(nn.Module):
         reconstructed = self.decoder(latent)
         return reconstructed
     
+SCALE_FACTOR = 0.54985
 
 # data loader
 class CatDataset(Dataset):
@@ -103,44 +105,64 @@ class SimpleUNet(nn.Module):
         # time embedding
         self.time_mlp = nn.Sequential(
             nn.Linear(1, time_dim),
-            nn.ReLU(),
+            nn.GELU(),  # GELU works better for diffusion noise mapping from RELU ??
             nn.Linear(time_dim, time_dim)
         )
-        
-        # downsampling
-        self.inc = nn.Conv2d(in_channels, 32, kernel_size=3, padding=1)
-        self.down1 = nn.Sequential(nn.MaxPool2d(2), nn.Conv2d(32, 64, kernel_size=3, padding=1), nn.ReLU())
-        
-        # time embedding into layers
+
+        #process the data
+        self.inc = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
         self.time_proj1 = nn.Linear(time_dim, 64)
-        self.time_proj2 = nn.Linear(time_dim, 32)
         
-        # upsampling
-        self.up1 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
-        self.outc = nn.Conv2d(32, in_channels, kernel_size=3, padding=1)
+        # downsampling from 16x16 down to 8x8
+        self.down = nn.Sequential(
+            nn.MaxPool2d(2),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.GELU()
+        )
+        self.time_proj2 = nn.Linear(time_dim, 128)
+
+        # processing at 8x8 resolution
+        self.bottleneck = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        )
+
+        # upsamples resolution from 8x8 back up to 16x16
+        self.up = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+
+        # processes combined features
+        self.out_conv = nn.Sequential(
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(64, in_channels, kernel_size=3, padding=1) # Back to original 8 channels
+        )
 
     def forward(self, x, t):
         # t shape: [batch, 1]
         t_emb = self.time_mlp(t) # Shape: [batch, time_dim]
         
-        # down
-        h1 = torch.relu(self.inc(x)) # [batch, 32, 16, 16]
-        h2 = self.down1(h1)          # [batch, 64, 8, 8]
+        # Level 1 (16x16)
+        h1 = self.inc(x)
+        h1 = h1 + self.time_proj1(t_emb)[:, :, None, None]
+        h1 = F.gelu(h1)
         
-        # add time
-        t_proj1 = self.time_proj1(t_emb)[:, :, None, None] # [batch, 64, 1, 1]
-        h2 = h2 + t_proj1
+        # Level 2 (8x8)
+        h2 = self.down(h1)
+        h2 = h2 + self.time_proj2(t_emb)[:, :, None, None] # Inject time awareness
         
-        # up
-        h3 = torch.relu(self.up1(h2)) # [batch, 32, 16, 16]
+        # bottleneck
+        h_bot = self.bottleneck(h2)
+
+        # Upsample back to 16x16
+        h_up = self.up(h_bot)
         
         # add time again
-        t_proj2 = self.time_proj2(t_emb)[:, :, None, None] # [batch, 32, 16, 16]
-        h3 = h3 + t_proj2
+        out = torch.cat([h_up, h1], dim=1) # Shape becomes [batch, 128, 16, 16], prevents from just being noise?
         
-        return self.outc(h3)
+        return self.out_conv(out)
     
-def train_diffusion(cat_folder, autoencoder_path, timesteps=200):
+def train_diffusion(cat_folder, autoencoder_path, timesteps=200, save_every=50):
     # load autoencoder
     ae = CatAutoencoder()
     ae.load_state_dict(torch.load(autoencoder_path))
@@ -153,14 +175,14 @@ def train_diffusion(cat_folder, autoencoder_path, timesteps=200):
     dataset = CatDataset(cat_folder)
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
     
-    optimizer = optim.Adam(unet.parameters(), lr=0.005)
+    optimizer = optim.Adam(unet.parameters(), lr=0.0002)
     criterion = nn.MSELoss()
     beta = torch.linspace(0.0001, 0.02, timesteps)
     alpha = 1.0 - beta
     alpha_cumprod = torch.cumprod(alpha, dim=0)
     
     # train
-    epochs = 30
+    epochs = 400
     # with torch.no_grad():
     #     sample_batch = next(iter(dataloader))
     #     sample_latents = ae.encoder(sample_batch)
@@ -199,6 +221,41 @@ def train_diffusion(cat_folder, autoencoder_path, timesteps=200):
             epoch_loss += loss.item()
             
         print(f"Epoch {epoch+1} Average Loss: {epoch_loss / len(dataloader):.4f}")
+
+        # generate and save img every save_every epochs
+        if (epoch + 1) % save_every == 0:
+            print(f"--> Generating progress image for Epoch {epoch+1}...")
+            unet.eval() # Switch to evaluation mode for generation
+            
+            with torch.no_grad():
+                # Start with pure static
+                x_t = torch.randn(1, 8, 16, 16) 
+                
+                # Denoise step-by-step
+                for i in reversed(range(timesteps)):
+                    t_tensor = torch.tensor([[i]], dtype=torch.float32)
+                    pred_noise = unet(x_t, t_tensor / timesteps)
+                    
+                    a = alpha[i]
+                    a_cum = alpha_cumprod[i]
+                    beta_i = beta[i]
+                    
+                    z = torch.randn_like(x_t) if i > 0 else 0
+                    
+                    x_t = (1 / torch.sqrt(a)) * (x_t - ((1 - a) / torch.sqrt(1 - a_cum)) * pred_noise) + torch.sqrt(beta_i) * z
+                    
+                # Decode and save
+                x_t = x_t / SCALE_FACTOR
+                generated_image = ae.decoder(x_t)
+                
+                # Convert to image format
+                generated_image = generated_image.squeeze(0).permute(1, 2, 0).numpy() * 255.0
+                generated_image = cv2.cvtColor(generated_image.astype(np.uint8), cv2.COLOR_RGB2BGR)
+                
+                filename = f"progress_epoch_{epoch+1}.jpg"
+                cv2.imwrite(filename, generated_image)
+                print(f"--> Saved: {filename}")
+
         
     torch.save(unet.state_dict(), "latent_unet.pth")
     return unet
